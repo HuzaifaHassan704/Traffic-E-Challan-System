@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Traffic e-Challan Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2436; --line:#2a3348;
+    --text:#e7ecf7; --muted:#8b96ad; --accent:#4f8cff; --danger:#ff5c6c;
+    --ok:#3ecf8e; --warn:#ffb84f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
+  header{padding:18px 28px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
+  header h1{font-size:18px;margin:0;font-weight:600;}
+  header h1 span{color:var(--accent);}
+  nav{display:flex;gap:6px;padding:12px 28px;background:var(--panel);border-bottom:1px solid var(--line);}
+  nav button{background:none;border:1px solid var(--line);color:var(--muted);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:14px;}
+  nav button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  main{padding:24px 28px;max-width:1200px;margin:0 auto;}
+  .tab{display:none;} .tab.active{display:block;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;}
+  input,select,textarea{width:100%;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--text);font-size:14px;}
+  textarea{resize:vertical;min-height:50px;}
+  button.btn{background:var(--accent);color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;margin-top:12px;}
+  button.btn.secondary{background:var(--panel2);border:1px solid var(--line);color:var(--text);}
+  button.btn.danger{background:var(--danger);}
+  button.btn.ok{background:var(--ok);color:#06291a;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);}
+  th{color:var(--muted);font-weight:500;}
+  .badge{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge.pending{background:#3a3320;color:var(--warn);}
+  .badge.confirmed{background:#1f3a2c;color:var(--ok);}
+  .badge.rejected{background:#3a2020;color:var(--danger);}
+  .badge.unpaid{background:#3a3320;color:var(--warn);}
+  .badge.paid{background:#1f3a2c;color:var(--ok);}
+  .muted{color:var(--muted);font-size:13px;}
+  .evidence-img{max-width:100%;border-radius:8px;border:1px solid var(--line);margin-top:10px;}
+  .rule-chip{display:inline-block;background:var(--panel2);border:1px solid var(--line);padding:2px 8px;border-radius:6px;font-size:11px;margin:2px 3px 2px 0;}
+  .checklist{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;}
+  .checklist label{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text);margin:0;}
+  .checklist input{width:auto;}
+  .rule-card{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:10px;background:var(--panel2);}
+  .rule-card h4{margin:0 0 6px;}
+  .row-actions{display:flex;gap:8px;}
+  .small-btn{padding:5px 10px;font-size:12px;margin:0;}
+  #uploadPreview{max-width:260px;border-radius:8px;margin-top:8px;border:1px solid var(--line);}
+  .empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚦 Traffic <span>e-Challan</span> System</h1>
+  <span class="muted" id="apiStatus">connecting...</span>
+</header>
+
+<nav>
+  <button class="active" data-tab="livecam">Live Camera</button>
+  <button data-tab="capture">Upload a Photo</button>
+  <button data-tab="violations">Violations Review</button>
+  <button data-tab="challans">Challans</button>
+  <button data-tab="rules">Rules Configuration</button>
+</nav>
+
+<main>
+
+  <!-- LIVE CAMERA TAB -->
+  <section class="tab active" id="livecam">
+    <div class="card">
+      <h3>Live camera capture</h3>
+      <p class="muted">Uses your device's actual camera through the browser — works for a laptop webcam or a phone camera (open this page on your phone's browser). For a real installed IP/CCTV camera, see the note below instead — those connect on the server side, not through the browser.</p>
+      <video id="liveVideo" autoplay playsinline style="width:100%;max-width:480px;border-radius:8px;border:1px solid var(--line);background:#000;"></video>
+      <canvas id="liveCanvas" style="display:none;"></canvas>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn" id="startCamBtn" onclick="startCamera()">Start Camera</button>
+        <button class="btn secondary" id="switchCamBtn" onclick="switchCamera()" style="display:none;">Switch Camera</button>
+        <button class="btn ok" id="captureBtn" onclick="captureLiveFrame()" style="display:none;">Capture & Check Frame</button>
+        <button class="btn secondary" id="autoBtn" onclick="toggleAutoCapture()" style="display:none;">Start Auto-Capture (every 5s)</button>
+        <button class="btn danger" id="stopCamBtn" onclick="stopCamera()" style="display:none;">Stop Camera</button>
+      </div>
+      <p class="muted" id="camError" style="color:#ff5c6c;"></p>
+      <div class="grid2" style="margin-top:10px;">
+        <div>
+          <label>Simulated speed (km/h) — optional, for overspeeding rules</label>
+          <input type="number" id="liveSpeedInput" placeholder="e.g. 78">
+        </div>
+        <div>
+          <label>Manual plate number — optional</label>
+          <input type="text" id="livePlateInput" placeholder="e.g. LEA-1234">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Connecting a real IP / CCTV camera</h3>
+      <p class="muted">
+        A real installed CCTV camera streams over RTSP, which browsers can't connect to directly —
+        it needs a small script running on the server instead. This project includes one:
+      </p>
+      <pre style="background:var(--panel2);padding:12px;border-radius:8px;overflow-x:auto;font-size:12px;">cd backend
+python camera_worker.py --source "rtsp://user:pass@192.168.1.50:554/stream1" --camera-id 1 --interval 5</pre>
+      <p class="muted">
+        Replace the RTSP URL with your camera's actual stream address (check its manual — Hikvision, Dahua, and generic ONVIF cameras all use slightly different URL formats). Violations it detects will show up in the Violations Review tab automatically, same as everything else.
+      </p>
+    </div>
+
+    <div class="card" id="liveResultCard" style="display:none;">
+      <h3>Result</h3>
+      <div id="liveResultSummary"></div>
+      <img id="liveResultImg" class="evidence-img">
+    </div>
+  </section>
+
+  <!-- CAPTURE TAB -->
+  <section class="tab" id="capture">
+    <div class="card">
+      <h3>Upload a photo</h3>
+      <p class="muted">Upload an image (e.g. a photo saved earlier, or a still frame). It will be run through the vehicle-detection model and checked against all active rules. Detected violations are queued for human review, not auto-issued.</p>
+      <label>Image / frame</label>
+      <input type="file" id="frameFile" accept="image/*" capture="environment">
+      <img id="uploadPreview" style="display:none">
+      <div class="grid2">
+        <div>
+          <label>Simulated speed (km/h) — optional, for overspeeding rules</label>
+          <input type="number" id="speedInput" placeholder="e.g. 78">
+        </div>
+        <div>
+          <label>Manual plate number — optional (ANPR model not included in this prototype)</label>
+          <input type="text" id="plateInput" placeholder="e.g. LEA-1234">
+        </div>
+      </div>
+      <label><input type="checkbox" id="wrongDirInput" style="width:auto;margin-right:6px;">Mark as travelling wrong direction</label>
+      <br>
+      <button class="btn" onclick="processFrame()">Run Detection & Rule Check</button>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <h3>Result</h3>
+      <div id="resultSummary"></div>
+      <img id="resultImg" class="evidence-img">
+    </div>
+  </section>
+
+  <!-- VIOLATIONS TAB -->
+  <section class="tab" id="violations">
+    <div class="card">
+      <h3>Pending & reviewed violations</h3>
+      <p class="muted">Every AI-flagged violation needs human confirmation before a challan (fine) is issued — this reduces false positives and legal risk.</p>
+      <div id="violationsList"></div>
+    </div>
+  </section>
+
+  <!-- CHALLANS TAB -->
+  <section class="tab" id="challans">
+    <div class="card">
+      <h3>Issued e-Challans</h3>
+      <div id="challansList"></div>
+    </div>
+  </section>
+
+  <!-- RULES TAB -->
+  <section class="tab" id="rules">
+    <div class="card">
+      <h3>Define a new rule</h3>
+      <div class="grid2">
+        <div>
+          <label>Rule name</label>
+          <input id="ruleName" placeholder="e.g. No trucks after 6pm">
+          <label>Rule type</label>
+          <select id="ruleType">
+            <option value="restricted_vehicle_type">Restricted vehicle type (in zone)</option>
+            <option value="restricted_zone_entry">No-entry zone (any vehicle)</option>
+            <option value="overspeeding">Overspeeding</option>
+            <option value="wrong_direction">Wrong-direction travel</option>
+          </select>
+          <label>Fine amount (PKR)</label>
+          <input id="ruleFine" type="number" value="1500">
+          <label id="speedLimitLabel" style="display:none;">Speed limit (km/h)</label>
+          <input id="ruleSpeedLimit" type="number" style="display:none;">
+        </div>
+        <div>
+          <label>Applies to vehicle types</label>
+          <div class="checklist">
+            <label><input type="checkbox" value="car" checked>Car</label>
+            <label><input type="checkbox" value="motorcycle" checked>Motorcycle</label>
+            <label><input type="checkbox" value="bus">Bus</label>
+            <label><input type="checkbox" value="truck">Truck</label>
+            <label><input type="checkbox" value="bicycle">Bicycle</label>
+            <label><input type="checkbox" value="person">Person</label>
+          </div>
+          <label>Description</label>
+          <textarea id="ruleDesc" placeholder="What does this rule enforce?"></textarea>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:10px;">Zone-based rules use a default full-frame zone in this prototype. A production build would let you draw the zone polygon directly on a camera snapshot.</p>
+      <button class="btn" onclick="createRule()">Add Rule</button>
+    </div>
+
+    <div class="card">
+      <h3>Active & inactive rules</h3>
+      <div id="rulesList"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const API = "http://localhost:8000";
+
+// ---- tab switching ----
+document.querySelectorAll("nav button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+    if(btn.dataset.tab==="violations") loadViolations();
+    if(btn.dataset.tab==="challans") loadChallans();
+    if(btn.dataset.tab==="rules") loadRules();
+  });
+});
+
+document.getElementById("ruleType").addEventListener("change", (e)=>{
+  const show = e.target.value === "overspeeding";
+  document.getElementById("speedLimitLabel").style.display = show ? "block":"none";
+  document.getElementById("ruleSpeedLimit").style.display = show ? "block":"none";
+});
+
+document.getElementById("frameFile").addEventListener("change", (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const img = document.getElementById("uploadPreview");
+  img.src = URL.createObjectURL(f);
+  img.style.display = "block";
+});
+
+async function checkApi(){
+  try{
+    const r = await fetch(API + "/");
+    if(r.ok){ document.getElementById("apiStatus").textContent = "● API connected"; document.getElementById("apiStatus").style.color = "#3ecf8e"; }
+  }catch(e){
+    document.getElementById("apiStatus").textContent = "● API not reachable — start the backend (see README)";
+    document.getElementById("apiStatus").style.color = "#ff5c6c";
+  }
+}
+checkApi();
+
+// ---- live camera (webcam / phone camera via browser) ----
+let liveStream = null;
+let currentFacingMode = "environment"; // back camera preferred on phones
+let autoCaptureTimer = null;
+
+async function startCamera(){
+  const video = document.getElementById("liveVideo");
+  document.getElementById("camError").textContent = "";
+  try{
+    liveStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: currentFacingMode },
+      audio: false
+    });
+    video.srcObject = liveStream;
+    document.getElementById("startCamBtn").style.display = "none";
+    document.getElementById("switchCamBtn").style.display = "inline-block";
+    document.getElementById("captureBtn").style.display = "inline-block";
+    document.getElementById("autoBtn").style.display = "inline-block";
+    document.getElementById("stopCamBtn").style.display = "inline-block";
+  }catch(e){
+    document.getElementById("camError").textContent =
+      "Couldn't access camera: " + e.message + ". Make sure you allowed camera permission, and that you're on https:// or localhost (browsers block camera access on plain http).";
+  }
+}
+
+async function switchCamera(){
+  currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+  stopCamera(true);
+  await startCamera();
+}
+
+function stopCamera(keepButtons){
+  if(liveStream){
+    liveStream.getTracks().forEach(t => t.stop());
+    liveStream = null;
+  }
+  if(autoCaptureTimer){ clearInterval(autoCaptureTimer); autoCaptureTimer = null; document.getElementById("autoBtn").textContent = "Start Auto-Capture (every 5s)"; }
+  if(!keepButtons){
+    document.getElementById("startCamBtn").style.display = "inline-block";
+    document.getElementById("switchCamBtn").style.display = "none";
+    document.getElementById("captureBtn").style.display = "none";
+    document.getElementById("autoBtn").style.display = "none";
+    document.getElementById("stopCamBtn").style.display = "none";
+  }
+}
+
+function toggleAutoCapture(){
+  const btn = document.getElementById("autoBtn");
+  if(autoCaptureTimer){
+    clearInterval(autoCaptureTimer);
+    autoCaptureTimer = null;
+    btn.textContent = "Start Auto-Capture (every 5s)";
+  } else {
+    captureLiveFrame();
+    autoCaptureTimer = setInterval(captureLiveFrame, 5000);
+    btn.textContent = "Stop Auto-Capture";
+  }
+}
+
+async function captureLiveFrame(){
+  const video = document.getElementById("liveVideo");
+  const canvas = document.getElementById("liveCanvas");
+  if(!video.videoWidth){ return; }
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.9));
+  const fd = new FormData();
+  fd.append("file", blob, "live_frame.jpg");
+  const speed = document.getElementById("liveSpeedInput").value;
+  if(speed) fd.append("speed_kmh", speed);
+  const plate = document.getElementById("livePlateInput").value;
+  if(plate) fd.append("plate_number_manual", plate);
+
+  document.getElementById("liveResultCard").style.display = "block";
+  document.getElementById("liveResultSummary").innerHTML = "<p class='muted'>Processing…</p>";
+
+  const res = await fetch(API + "/process-frame", {method:"POST", body:fd});
+  const data = await res.json();
+
+  let html = `<p><b>${data.detections.length}</b> object(s) detected. `;
+  if(data.violations.length===0){
+    html += `<span style="color:#3ecf8e">No rule violations found.</span></p>`;
+  } else {
+    html += `<span style="color:#ff5c6c">${data.violations.length} violation(s) flagged for review.</span></p><ul>`;
+    data.violations.forEach(v=>{
+      html += `<li>${v.rule_name} — ${v.vehicle_class} (conf ${v.confidence}) — ${v.reason} — fine PKR ${v.fine_amount}</li>`;
+    });
+    html += "</ul>";
+  }
+  document.getElementById("liveResultSummary").innerHTML = html;
+  document.getElementById("liveResultImg").src = API + data.evidence_image;
+}
+
+// ---- capture / process frame ----
+async function processFrame(){
+  const fileInput = document.getElementById("frameFile");
+  if(!fileInput.files[0]){ alert("Choose an image first."); return; }
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  const speed = document.getElementById("speedInput").value;
+  if(speed) fd.append("speed_kmh", speed);
+  const plate = document.getElementById("plateInput").value;
+  if(plate) fd.append("plate_number_manual", plate);
+  fd.append("wrong_direction", document.getElementById("wrongDirInput").checked);
+
+  document.getElementById("resultCard").style.display = "block";
+  document.getElementById("resultSummary").innerHTML = "<p class='muted'>Processing…</p>";
+
+  const res = await fetch(API + "/process-frame", {method:"POST", body:fd});
+  const data = await res.json();
+
+  let html = `<p><b>${data.detections.length}</b> object(s) detected. `;
+  if(data.violations.length===0){
+    html += `<span style="color:#3ecf8e">No rule violations found.</span></p>`;
+  } else {
+    html += `<span style="color:#ff5c6c">${data.violations.length} violation(s) flagged for review.</span></p>`;
+    html += "<ul>";
+    data.violations.forEach(v=>{
+      html += `<li>${v.rule_name} — ${v.vehicle_class} (conf ${v.confidence}) — ${v.reason} — fine PKR ${v.fine_amount}</li>`;
+    });
+    html += "</ul>";
+  }
+  document.getElementById("resultSummary").innerHTML = html;
+  document.getElementById("resultImg").src = API + data.evidence_image;
+}
+
+// ---- violations ----
+async function loadViolations(){
+  const res = await fetch(API + "/violations");
+  const rows = await res.json();
+  const el = document.getElementById("violationsList");
+  if(rows.length===0){ el.innerHTML = "<div class='empty'>No violations logged yet.</div>"; return; }
+  let html = "<table><tr><th>ID</th><th>Rule</th><th>Vehicle</th><th>Plate</th><th>Conf</th><th>Fine</th><th>Status</th><th></th></tr>";
+  rows.forEach(v=>{
+    html += `<tr>
+      <td>#${v.id}</td><td>${v.rule_name}</td><td>${v.vehicle_class}</td>
+      <td>${v.plate_number || '<span class="muted">—</span>'}</td>
+      <td>${v.confidence}</td><td>PKR ${v.fine_amount}</td>
+      <td><span class="badge ${v.status==='pending_review'?'pending':v.status}">${v.status.replace('_',' ')}</span></td>
+      <td class="row-actions">
+        ${v.status==='pending_review' ? `
+          <button class="btn ok small-btn" onclick="decide(${v.id}, true)">Confirm</button>
+          <button class="btn danger small-btn" onclick="decide(${v.id}, false)">Reject</button>` : ''}
+      </td>
+    </tr>`;
+  });
+  html += "</table>";
+  el.innerHTML = html;
+}
+
+async function decide(id, approve){
+  await fetch(`${API}/violations/${id}/decide`, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({approve})
+  });
+  loadViolations();
+}
+
+// ---- challans ----
+async function loadChallans(){
+  const res = await fetch(API + "/challans");
+  const rows = await res.json();
+  const el = document.getElementById("challansList");
+  if(rows.length===0){ el.innerHTML = "<div class='empty'>No challans issued yet.</div>"; return; }
+  let html = "<table><tr><th>Challan No</th><th>Plate</th><th>Fine</th><th>Status</th><th>Issued</th><th></th></tr>";
+  rows.forEach(c=>{
+    html += `<tr>
+      <td>${c.challan_no}</td><td>${c.plate_number || '<span class="muted">—</span>'}</td>
+      <td>PKR ${c.fine_amount}</td>
+      <td><span class="badge ${c.payment_status}">${c.payment_status}</span></td>
+      <td class="muted">${new Date(c.issued_at).toLocaleString()}</td>
+      <td>${c.payment_status==='unpaid' ? `<button class="btn secondary small-btn" onclick="markPaid(${c.id})">Mark Paid</button>` : ''}</td>
+    </tr>`;
+  });
+  html += "</table>";
+  el.innerHTML = html;
+}
+
+async function markPaid(id){
+  await fetch(`${API}/challans/${id}/mark-paid`, {method:"POST"});
+  loadChallans();
+}
+
+// ---- rules ----
+async function loadRules(){
+  const res = await fetch(API + "/rules");
+  const rows = await res.json();
+  const el = document.getElementById("rulesList");
+  if(rows.length===0){ el.innerHTML = "<div class='empty'>No rules defined.</div>"; return; }
+  el.innerHTML = rows.map(r => `
+    <div class="rule-card">
+      <h4>${r.name} ${r.active ? '' : '<span class="badge rejected">inactive</span>'}</h4>
+      <div class="muted">${r.description || ''}</div>
+      <div style="margin-top:8px;">
+        <span class="rule-chip">${r.rule_type}</span>
+        ${r.applies_to.map(a=>`<span class="rule-chip">${a}</span>`).join('')}
+        <span class="rule-chip">Fine: PKR ${r.fine_amount}</span>
+        ${r.speed_limit_kmh ? `<span class="rule-chip">Limit: ${r.speed_limit_kmh} km/h</span>` : ''}
+      </div>
+      <div class="row-actions" style="margin-top:10px;">
+        <button class="btn secondary small-btn" onclick="toggleRule(${r.id}, ${r.active ? 0 : 1})">${r.active ? 'Deactivate' : 'Activate'}</button>
+        <button class="btn danger small-btn" onclick="deleteRule(${r.id})">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function createRule(){
+  const applies_to = Array.from(document.querySelectorAll(".checklist input:checked")).map(c=>c.value);
+  const payload = {
+    name: document.getElementById("ruleName").value || "Untitled rule",
+    rule_type: document.getElementById("ruleType").value,
+    description: document.getElementById("ruleDesc").value,
+    applies_to,
+    zone_polygon: [[0,0],[1,0],[1,1],[0,1]],
+    speed_limit_kmh: document.getElementById("ruleSpeedLimit").value ? Number(document.getElementById("ruleSpeedLimit").value) : null,
+    fine_amount: Number(document.getElementById("ruleFine").value) || 1000,
+    active: true
+  };
+  await fetch(API + "/rules", {
+    method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
+  });
+  document.getElementById("ruleName").value = "";
+  document.getElementById("ruleDesc").value = "";
+  loadRules();
+}
+
+async function toggleRule(id, active){
+  const rules = await (await fetch(API + "/rules")).json();
+  const r = rules.find(x=>x.id===id);
+  r.active = !!active;
+  await fetch(`${API}/rules/${id}`, {method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(r)});
+  loadRules();
+}
+
+async function deleteRule(id){
+  if(!confirm("Delete this rule?")) return;
+  await fetch(`${API}/rules/${id}`, {method:"DELETE"});
+  loadRules();
+}
+
+loadRules();
+</script>
+</body>
+</html>
